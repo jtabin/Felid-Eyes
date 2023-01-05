@@ -1,1 +1,1 @@
-*. linguist-language=R, Jupyter Notebook
+*.Rmd linguist-language=R
