@@ -1,5 +1,5 @@
 # Felid Iris Color Analysis
-This repository contains the images and code used for the analysis done in [Paper to come].
+This repository contains the images and code used for the analysis done in "Evolutionary Insights Into Felidae Iris Color Through Ancestral State Reconstruction".
 
 - Data
   - The "Data" folder contains .csv files needed to run the analyses. All of them were produced through the code presented here, except for "enviro_data.csv" which was collected as represented in the paper.
