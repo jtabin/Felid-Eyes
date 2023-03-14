@@ -13,6 +13,6 @@ This repository contains the images and code used for the analysis done in "Evol
   - "Output Specific Colors.ipynb" transforms the RGB .csv output of "Data Collection Script.ipynb" and "Specific Color Reconstruction.Rmd" into colorful images for figure creation. It also takes "shade_bg.png" as an background input, provided in this repository as well.
   - "Find Correlations.Rmd" takes the output of "Data Collection Script.ipynb" and performs phylogenetic and tetrachoric correlations, resulting in raw data, as well as figures.
  
-These methods can be applied to any color reconstruction, whether or not phylogenetics are involved. 
+These methods can be applied to any color reconstruction, whether or not phylogenetics are involved. For more detail about the files or code presented here, please see the file "README_DataSetInfo.md" presented here or go to https://doi.org/10.5061/dryad.s4mw6m9b0.
 
 #### I hope this data and analysis is useful! Please do not hesitate to contact me with questions at jtabin1@gmail.com!
