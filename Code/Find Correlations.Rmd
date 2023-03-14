@@ -1,0 +1,831 @@
+---
+title: "Felid Project Corr All"
+output: html_document
+---
+
+```{r}
+# load packages
+library(ape)
+library(geiger)
+library(BAMMtools)
+library(psych)
+library("dplyr")
+library("devtools")
+library("btw")
+library(ggplot2)
+library(reshape2)
+```
+
+```{r}
+# load tree
+mytr_short <- read.tree(text = "((((((((((((Felis_silvestris:0.00132,((Felis_lybica_cafra:0.0000001,Felis_lybica_ornata:0.0000001,Felis_lybica_lybica:0.0000001):0.00157,Felis_bieti:0.00114):0.00042):0.00108,Felis_margarita:0.00313):0.00066,Felis_nigripes:0.00227):0.00042,(Felis_chaus_chaus:0.0000001,Felis_chaus_affinis:0.0000001):0.00301):0.00265,(((((Prionailurus_bengalensis_bengalensis:0.0000001,Prionailurus_bengalensis_iriomotensis:0.0000001,Prionailurus_javanensis:0.0000001):0.00175,Prionailurus_viverrinus:0.00301):0.00054,Prionailurus_planiceps:0.00247):0.00151,Prionailurus_rubiginosus:0.00307):0.00102,Otocolobus_manul:0.00614):0.00036):0.00054,((Puma_concolor:0.00361,Herpailurus_yagouaroundi:0.00313):0.00054,Acinonyx_jubatus:0.00464):0.00157):0.00054,(((Lynx_pardinus:0.00108,Lynx_lynx:0.00096):0.00036,Lynx_canadensis:0.00114):0.00102,Lynx_rufus:0.00337):0.00367):0.00084,(((((Leopardus_geoffroyi:0.00102,Leopardus_guigna:0.00102):0.0000001,Leopardus_guttulus:0.0000001):0.00036,Leopardus_tigrinus:0.00108):0.00139,(Leopardus_colocola_pajeros:0.00078,Leopardus_jacobita:0.00163):0.00139):0.00067,(Leopardus_wiedii:0.00163,Leopardus_pardalis_pardalis:0.00205):0.00090):0.00554):0.00060,((Caracal_caracal:0.00175,Caracal_aurata:0.00199):0.00367,Leptailurus_serval:0.00530):0.00283):0.00096,((Catopuma_badia:0.00265,Catopuma_temminckii:0.00349):0.00108,Pardofelis_marmorata:0.00470):0.00313):0.00157,(((((Panthera_leo_melanochaita:0.0000001,Panthera_leo_persica:0.0000001,Panthera_leo_leo:0.0000001):0.00102,Panthera_onca:0.00223):0.00048,(Panthera_pardus_orientalis:0.0000001,Panthera_pardus_tulliana:0.0000001,Panthera_pardus_fusca:0.0000001):0.00199):0.00066,((Panthera_tigris_tigris_corbetti:0.0000001,Panthera_tigris_tigris_tigris:0.0000001,Panthera_tigris_tigris_altaica:0.0000001,Panthera_tigris_sondaica:0.0000001,Panthera_tigris_tigris_amoyensis:0.0000001,Panthera_tigris_tigris_jacksoni:0.0000001):0.00187,Panthera_uncia:0.00295):0.00078):0.00217,(Neofelis_nebulosa:0.0000001,Neofelis_diardi:0.0000001):0.00464):0.00398):0.03265,Prionodon_linsang:0.03801);")
+plot(mytr_short)
+```
+```{r}
+# load data
+gen_dat <- read.csv("col_data.csv")
+gen_dat_dom <- read.csv("dom_col_data.csv")
+enviro_dat <- read.csv("enviro_data.csv")
+```
+
+```{r}
+# correlating eye colors to one another over the tree
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+corr <- matrix(, nrow = 5, ncol = 29)
+rownames(corr)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    command_vec1 <- c("2", "1") # independent model with ML analysis
+    results_1 <- bayestraits(merged, mytr_short, command_vec1)
+    command_vec2 <- c("3", "1") # dependent model with ML analysis
+    results_2 <- bayestraits(merged, mytr_short, command_vec2)
+    log1 <- results_1$Log$results
+    log2 <- results_2$Log$results
+    factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+    corr[i,j] <- factor
+    }
+}
+corr
+```
+
+```{r}
+# correlating eye colors to one another using tetrachoric (getting the coefficient)
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+coeff <- matrix(, nrow = 5, ncol = 29)
+rownames(coeff)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    merged <- merged[,-1]
+    temp <- tetrachoric(merged,correct=FALSE)
+    coeff[i,j] <- temp$rho[2]
+    }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank()) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+```{r}
+# correlating eye shades over the subtrees (the trees which include all the individuals with each eye color)
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat2 <- read.csv("general_data_reordered.csv")
+
+
+corr <- matrix(, nrow = 18, ncol = 29)
+rownames(corr)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_brown_top <- gen_dat2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_brown_top <- gen_dat_brown_top %>% mutate(shadeR = ifelse(gen_dat_brown_top$avg_R < getJenksBreaks(gen_dat_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_brown_top$avg_G < getJenksBreaks(gen_dat_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_brown_top$avg_B < getJenksBreaks(gen_dat_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_gray_top <- gen_dat2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_gray_top <- gen_dat_gray_top %>% mutate(shadeR = ifelse(gen_dat_gray_top$avg_R < getJenksBreaks(gen_dat_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_gray_top$avg_G < getJenksBreaks(gen_dat_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_gray_top$avg_B < getJenksBreaks(gen_dat_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_yelbei_top <- gen_dat2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_yelbei_top <- gen_dat_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_yelbei_top$avg_R < getJenksBreaks(gen_dat_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_yelbei_top$avg_G < getJenksBreaks(gen_dat_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_yelbei_top$avg_B < getJenksBreaks(gen_dat_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_hazgre_top <- gen_dat2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_hazgre_top <- gen_dat_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_hazgre_top$avg_R < getJenksBreaks(gen_dat_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_hazgre_top$avg_G < getJenksBreaks(gen_dat_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_hazgre_top$avg_B < getJenksBreaks(gen_dat_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_blue_top <- gen_dat2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_blue_top <- gen_dat_blue_top %>% mutate(shadeR = ifelse(gen_dat_blue_top$avg_R < getJenksBreaks(gen_dat_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_blue_top$avg_G < getJenksBreaks(gen_dat_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_blue_top$avg_B < getJenksBreaks(gen_dat_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_all_top <- gen_dat2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_all_top <- gen_dat_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_all_top$avg_R < getJenksBreaks(gen_dat_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_all_top$avg_G < getJenksBreaks(gen_dat_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_all_top$avg_B < getJenksBreaks(gen_dat_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_brown_top,gen_dat_hazgre_top,gen_dat_yelbei_top,gen_dat_gray_top,gen_dat_blue_top,gen_dat_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      command_vec1 <- c("2", "1") # independent model with ML analysis
+      results_1 <- bayestraits(merged, trees[[i]], command_vec1)
+      command_vec2 <- c("3", "1") # dependent model with ML analysis
+      results_2 <- bayestraits(merged, trees[[i]], command_vec2)
+      log1 <- results_1$Log$results
+      log2 <- results_2$Log$results
+      factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+      corr[k+(i-1)*3,j] <- factor
+    }
+  }
+}
+corr
+```
+
+```{r}
+# correlating eye shades using tetrachoric (getting the coefficient)
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat2 <- read.csv("general_data_reordered.csv")
+
+
+coeff <- matrix(, nrow = 18, ncol = 29)
+rownames(coeff)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_brown_top <- gen_dat2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_brown_top <- gen_dat_brown_top %>% mutate(shadeR = ifelse(gen_dat_brown_top$avg_R < getJenksBreaks(gen_dat_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_brown_top$avg_G < getJenksBreaks(gen_dat_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_brown_top$avg_B < getJenksBreaks(gen_dat_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_gray_top <- gen_dat2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_gray_top <- gen_dat_gray_top %>% mutate(shadeR = ifelse(gen_dat_gray_top$avg_R < getJenksBreaks(gen_dat_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_gray_top$avg_G < getJenksBreaks(gen_dat_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_gray_top$avg_B < getJenksBreaks(gen_dat_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_yelbei_top <- gen_dat2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_yelbei_top <- gen_dat_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_yelbei_top$avg_R < getJenksBreaks(gen_dat_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_yelbei_top$avg_G < getJenksBreaks(gen_dat_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_yelbei_top$avg_B < getJenksBreaks(gen_dat_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_hazgre_top <- gen_dat2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_hazgre_top <- gen_dat_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_hazgre_top$avg_R < getJenksBreaks(gen_dat_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_hazgre_top$avg_G < getJenksBreaks(gen_dat_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_hazgre_top$avg_B < getJenksBreaks(gen_dat_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_blue_top <- gen_dat2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_blue_top <- gen_dat_blue_top %>% mutate(shadeR = ifelse(gen_dat_blue_top$avg_R < getJenksBreaks(gen_dat_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_blue_top$avg_G < getJenksBreaks(gen_dat_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_blue_top$avg_B < getJenksBreaks(gen_dat_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_all_top <- gen_dat2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_all_top <- gen_dat_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_all_top$avg_R < getJenksBreaks(gen_dat_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_all_top$avg_G < getJenksBreaks(gen_dat_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_all_top$avg_B < getJenksBreaks(gen_dat_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_brown_top,gen_dat_hazgre_top,gen_dat_yelbei_top,gen_dat_gray_top,gen_dat_blue_top,gen_dat_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      merged <- merged[,-1]
+      if (length(merged[,2])!=sum(merged[,2]) & sum(merged[,2]!=0)){
+        temp <- tetrachoric(merged,correct=FALSE)
+        coeff[k+(i-1)*3,j] <- temp$rho[2]
+      } else if (sum(merged[,2]==0)){
+        coeff[k+(i-1)*3,j] <- -1
+      } else {
+        coeff[k+(i-1)*3,j] <- 1
+      }
+    }
+  }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank(), axis.text.x = element_text(angle = 30,hjust = 1)) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Dominant colors only
+```{r}
+# correlating eye colors to one another
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+corr <- matrix(, nrow = 5, ncol = 29)
+rownames(corr)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat_dom %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat_dom %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    command_vec1 <- c("2", "1") # independent model with ML analysis
+    results_1 <- bayestraits(merged, mytr_short, command_vec1)
+    command_vec2 <- c("3", "1") # dependent model with ML analysis
+    results_2 <- bayestraits(merged, mytr_short, command_vec2)
+    log1 <- results_1$Log$results
+    log2 <- results_2$Log$results
+    factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+    corr[i,j] <- factor
+    }
+}
+corr
+```
+
+```{r}
+# correlating eye colors to one another
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+coeff <- matrix(, nrow = 5, ncol = 29)
+rownames(coeff)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat_dom %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat_dom %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    merged <- merged[,-1]
+    temp <- tetrachoric(merged,correct=FALSE)
+    coeff[i,j] <- temp$rho[2]
+    }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank()) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+```{r}
+# correlating eye shades
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat_dom2 <- read.csv("general_data_reordered.csv")
+
+
+corr <- matrix(, nrow = 18, ncol = 29)
+rownames(corr)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_dom_brown_top <- gen_dat_dom2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_dom_brown_top <- gen_dat_dom_brown_top %>% mutate(shadeR = ifelse(gen_dat_dom_brown_top$avg_R < getJenksBreaks(gen_dat_dom_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_brown_top$avg_G < getJenksBreaks(gen_dat_dom_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_brown_top$avg_B < getJenksBreaks(gen_dat_dom_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_dom_gray_top <- gen_dat_dom2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_dom_gray_top <- gen_dat_dom_gray_top %>% mutate(shadeR = ifelse(gen_dat_dom_gray_top$avg_R < getJenksBreaks(gen_dat_dom_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_gray_top$avg_G < getJenksBreaks(gen_dat_dom_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_gray_top$avg_B < getJenksBreaks(gen_dat_dom_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_yelbei_top <- gen_dat_dom2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_dom_yelbei_top <- gen_dat_dom_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_dom_yelbei_top$avg_R < getJenksBreaks(gen_dat_dom_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_yelbei_top$avg_G < getJenksBreaks(gen_dat_dom_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_yelbei_top$avg_B < getJenksBreaks(gen_dat_dom_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_hazgre_top <- gen_dat_dom2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_dom_hazgre_top <- gen_dat_dom_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_dom_hazgre_top$avg_R < getJenksBreaks(gen_dat_dom_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_hazgre_top$avg_G < getJenksBreaks(gen_dat_dom_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_hazgre_top$avg_B < getJenksBreaks(gen_dat_dom_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_blue_top <- gen_dat_dom2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_dom_blue_top <- gen_dat_dom_blue_top %>% mutate(shadeR = ifelse(gen_dat_dom_blue_top$avg_R < getJenksBreaks(gen_dat_dom_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_blue_top$avg_G < getJenksBreaks(gen_dat_dom_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_blue_top$avg_B < getJenksBreaks(gen_dat_dom_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_dom_all_top <- gen_dat_dom2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_dom_all_top <- gen_dat_dom_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_dom_all_top$avg_R < getJenksBreaks(gen_dat_dom_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_all_top$avg_G < getJenksBreaks(gen_dat_dom_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_all_top$avg_B < getJenksBreaks(gen_dat_dom_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_dom_brown_top,gen_dat_dom_hazgre_top,gen_dat_dom_yelbei_top,gen_dat_dom_gray_top,gen_dat_dom_blue_top,gen_dat_dom_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat_dom %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      command_vec1 <- c("2", "1") # independent model with ML analysis
+      results_1 <- bayestraits(merged, trees[[i]], command_vec1)
+      command_vec2 <- c("3", "1") # dependent model with ML analysis
+      results_2 <- bayestraits(merged, trees[[i]], command_vec2)
+      log1 <- results_1$Log$results
+      log2 <- results_2$Log$results
+      factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+      corr[k+(i-1)*3,j] <- factor
+    }
+  }
+}
+corr
+```
+
+```{r}
+# correlating eye shades
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat_dom2 <- read.csv("general_data_reordered.csv")
+
+
+coeff <- matrix(, nrow = 18, ncol = 29)
+rownames(coeff)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_dom_brown_top <- gen_dat_dom2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_dom_brown_top <- gen_dat_dom_brown_top %>% mutate(shadeR = ifelse(gen_dat_dom_brown_top$avg_R < getJenksBreaks(gen_dat_dom_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_brown_top$avg_G < getJenksBreaks(gen_dat_dom_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_brown_top$avg_B < getJenksBreaks(gen_dat_dom_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_dom_gray_top <- gen_dat_dom2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_dom_gray_top <- gen_dat_dom_gray_top %>% mutate(shadeR = ifelse(gen_dat_dom_gray_top$avg_R < getJenksBreaks(gen_dat_dom_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_gray_top$avg_G < getJenksBreaks(gen_dat_dom_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_gray_top$avg_B < getJenksBreaks(gen_dat_dom_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_yelbei_top <- gen_dat_dom2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_dom_yelbei_top <- gen_dat_dom_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_dom_yelbei_top$avg_R < getJenksBreaks(gen_dat_dom_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_yelbei_top$avg_G < getJenksBreaks(gen_dat_dom_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_yelbei_top$avg_B < getJenksBreaks(gen_dat_dom_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_hazgre_top <- gen_dat_dom2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_dom_hazgre_top <- gen_dat_dom_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_dom_hazgre_top$avg_R < getJenksBreaks(gen_dat_dom_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_hazgre_top$avg_G < getJenksBreaks(gen_dat_dom_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_hazgre_top$avg_B < getJenksBreaks(gen_dat_dom_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_dom_blue_top <- gen_dat_dom2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_dom_blue_top <- gen_dat_dom_blue_top %>% mutate(shadeR = ifelse(gen_dat_dom_blue_top$avg_R < getJenksBreaks(gen_dat_dom_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_blue_top$avg_G < getJenksBreaks(gen_dat_dom_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_blue_top$avg_B < getJenksBreaks(gen_dat_dom_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_dom_all_top <- gen_dat_dom2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_dom_all_top <- gen_dat_dom_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_dom_all_top$avg_R < getJenksBreaks(gen_dat_dom_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_dom_all_top$avg_G < getJenksBreaks(gen_dat_dom_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_dom_all_top$avg_B < getJenksBreaks(gen_dat_dom_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_dom_brown_top,gen_dat_dom_hazgre_top,gen_dat_dom_yelbei_top,gen_dat_dom_gray_top,gen_dat_dom_blue_top,gen_dat_dom_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat_dom %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      merged <- merged[,-1]
+      if (length(merged[,2])!=sum(merged[,2]) & sum(merged[,2]!=0)){
+        temp <- tetrachoric(merged,correct=FALSE)
+        coeff[k+(i-1)*3,j] <- temp$rho[2]
+      } else if (sum(merged[,2]==0)){
+        coeff[k+(i-1)*3,j] <- -1
+      } else {
+        coeff[k+(i-1)*3,j] <- 1
+      }
+    }
+  }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank(), axis.text.x = element_text(angle = 30,hjust = 1)) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+
+
+
+
+
+
+
+# with long phylogeny instead
+
+```{r}
+# load tree (THIS IS THE LONG PHYLOGENY, DESPITE VARIABLE NAME)
+mytr_short <- read.tree(text = "((((((((((((Felis_silvestris:0.00132,(Felis_lybica_cafra:0.00157,Felis_lybica_ornata:0.00157,Felis_lybica_lybica:0.00157,Felis_bieti:0.00114):0.00042):0.00108,Felis_margarita:0.00313):0.00066,Felis_nigripes:0.00227):0.00042,Felis_chaus_chaus:0.00301,Felis_chaus_affinis:0.00301):0.00265,((((Prionailurus_bengalensis_bengalensis:0.00175,Prionailurus_bengalensis_iriomotensis:0.00175,Prionailurus_javanensis:0.00175,Prionailurus_viverrinus:0.00301):0.00054,Prionailurus_planiceps:0.00247):0.00151,Prionailurus_rubiginosus:0.00307):0.00102,Otocolobus_manul:0.00614):0.00036):0.00054,((Puma_concolor:0.00361,Herpailurus_yagouaroundi:0.00313):0.00054,Acinonyx_jubatus:0.00464):0.00157):0.00054,(((Lynx_pardinus:0.00108,Lynx_lynx:0.00096):0.00036,Lynx_canadensis:0.00114):0.00102,Lynx_rufus:0.00337):0.00367):0.00084,((((Leopardus_geoffroyi:0.00102,Leopardus_guigna:0.00102):0.00036,Leopardus_guttulus:0.00138,Leopardus_tigrinus:0.00108):0.00139,(Leopardus_colocola_pajeros:0.00078,Leopardus_jacobita:0.00163):0.00139):0.00067,(Leopardus_wiedii:0.00163,Leopardus_pardalis_pardalis:0.00205):0.00090):0.00554):0.00060,((Caracal_caracal:0.00175,Caracal_aurata:0.00199):0.00367,Leptailurus_serval:0.00530):0.00283):0.00096,((Catopuma_badia:0.00265,Catopuma_temminckii:0.00349):0.00108,Pardofelis_marmorata:0.00470):0.00313):0.00157,((((Panthera_leo_melanochaita:0.00102,Panthera_leo_persica:0.00102,Panthera_leo_leo:0.00102,Panthera_onca:0.00223):0.00048,Panthera_pardus_orientalis:0.00199,Panthera_pardus_tulliana:0.00199,Panthera_pardus_fusca:0.00199):0.00066,(Panthera_tigris_tigris_corbetti:0.00187,Panthera_tigris_tigris_tigris:0.00187,Panthera_tigris_tigris_altaica:0.00187,Panthera_tigris_sondaica:0.00187,Panthera_tigris_tigris_amoyensis:0.00187,Panthera_tigris_tigris_jacksoni:0.00187,Panthera_uncia:0.00295):0.00078):0.00217,Neofelis_nebulosa:0.00464,Neofelis_diardi:0.00464):0.00398):0.03265,Prionodon_linsang:0.03801);")
+plot(mytr_short)
+```
+
+```{r}
+# correlating eye colors to one another
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+corr <- matrix(, nrow = 5, ncol = 29)
+rownames(corr)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    command_vec1 <- c("2", "1") # independent model with ML analysis
+    results_1 <- bayestraits(merged, mytr_short, command_vec1)
+    command_vec2 <- c("3", "1") # dependent model with ML analysis
+    results_2 <- bayestraits(merged, mytr_short, command_vec2)
+    log1 <- results_1$Log$results
+    log2 <- results_2$Log$results
+    factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+    corr[i,j] <- factor
+    }
+}
+corr
+```
+
+```{r}
+# correlating eye colors to one another
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+coeff <- matrix(, nrow = 5, ncol = 29)
+rownames(coeff)<- c("Brown","Hazel/Green","Yellow/Beige","Gray","Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+for (i in 1:5) {
+  for (j in 1:29){
+    col1 <- gen_dat %>% select(Rename,names[i])
+    if (j < 6){
+      col2 <- gen_dat %>% select(Rename,names2[j])
+    } else {
+      col2 <- enviro_dat %>% select(Rename,names2[j]) 
+    }
+    merged <- merge(col1, col2, by = "Rename")
+    merged <- merged[,-1]
+    temp <- tetrachoric(merged,correct=FALSE)
+    coeff[i,j] <- temp$rho[2]
+    }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank()) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+```{r}
+# correlating eye shades
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat2 <- read.csv("general_data_reordered.csv")
+
+
+corr <- matrix(, nrow = 18, ncol = 29)
+rownames(corr)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(corr)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_brown_top <- gen_dat2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_brown_top <- gen_dat_brown_top %>% mutate(shadeR = ifelse(gen_dat_brown_top$avg_R < getJenksBreaks(gen_dat_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_brown_top$avg_G < getJenksBreaks(gen_dat_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_brown_top$avg_B < getJenksBreaks(gen_dat_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_gray_top <- gen_dat2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_gray_top <- gen_dat_gray_top %>% mutate(shadeR = ifelse(gen_dat_gray_top$avg_R < getJenksBreaks(gen_dat_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_gray_top$avg_G < getJenksBreaks(gen_dat_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_gray_top$avg_B < getJenksBreaks(gen_dat_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_yelbei_top <- gen_dat2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_yelbei_top <- gen_dat_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_yelbei_top$avg_R < getJenksBreaks(gen_dat_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_yelbei_top$avg_G < getJenksBreaks(gen_dat_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_yelbei_top$avg_B < getJenksBreaks(gen_dat_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_hazgre_top <- gen_dat2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_hazgre_top <- gen_dat_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_hazgre_top$avg_R < getJenksBreaks(gen_dat_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_hazgre_top$avg_G < getJenksBreaks(gen_dat_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_hazgre_top$avg_B < getJenksBreaks(gen_dat_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_blue_top <- gen_dat2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_blue_top <- gen_dat_blue_top %>% mutate(shadeR = ifelse(gen_dat_blue_top$avg_R < getJenksBreaks(gen_dat_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_blue_top$avg_G < getJenksBreaks(gen_dat_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_blue_top$avg_B < getJenksBreaks(gen_dat_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_all_top <- gen_dat2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_all_top <- gen_dat_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_all_top$avg_R < getJenksBreaks(gen_dat_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_all_top$avg_G < getJenksBreaks(gen_dat_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_all_top$avg_B < getJenksBreaks(gen_dat_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_brown_top,gen_dat_hazgre_top,gen_dat_yelbei_top,gen_dat_gray_top,gen_dat_blue_top,gen_dat_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      command_vec1 <- c("2", "1") # independent model with ML analysis
+      results_1 <- bayestraits(merged, trees[[i]], command_vec1)
+      command_vec2 <- c("3", "1") # dependent model with ML analysis
+      results_2 <- bayestraits(merged, trees[[i]], command_vec2)
+      log1 <- results_1$Log$results
+      log2 <- results_2$Log$results
+      factor <- 2*(tail(log2$Lh, 1) - tail(log1$Lh, 1))
+      corr[k+(i-1)*3,j] <- factor
+    }
+  }
+}
+corr
+```
+
+```{r}
+# correlating eye shades
+mytr_brown_short <- drop.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_fusca","Panthera_pardus_tulliana","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_melanochaita","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_lybica_lybica","Felis_lybica_ornata","Felis_silvestris"),trim.internal = TRUE)
+
+mytr_gray_short <- drop.tip(mytr_short, c("Prionodon_linsang","Panthera_leo_leo","Panthera_leo_melanochaita","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guttulus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_javanensis","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+
+mytr_yelbei_short <- keep.tip(mytr_short, c("Panthera_tigris_tigris_jacksoni","Panthera_tigris_tigris_amoyensis","Panthera_tigris_sondaica","Panthera_tigris_tigris_altaica","Panthera_tigris_tigris_tigris","Panthera_tigris_tigris_corbetti","Panthera_pardus_orientalis","Panthera_onca","Panthera_leo_leo","Panthera_leo_persica","Panthera_leo_melanochaita","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Felis_lybica_lybica","Felis_lybica_cafra","Lynx_pardinus"))
+
+mytr_hazgre_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_sondaica","Panthera_pardus_orientalis","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus_affinis","Felis_chaus_chaus","Felis_nigripes","Felis_margarita","Felis_lybica_lybica","Felis_lybica_ornata","Felis_lybica_cafra","Felis_silvestris"))
+
+mytr_blue_short <- keep.tip(mytr_short, c("Panthera_uncia","Panthera_tigris_tigris_jacksoni","Panthera_pardus_fusca","Panthera_pardus_orientalis","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+
+gen_dat2 <- read.csv("general_data_reordered.csv")
+
+
+coeff <- matrix(, nrow = 18, ncol = 29)
+rownames(coeff)<- c("Brown Red","Brown Green","Brown Blue","Hazel/Green Red","Hazel/Green Green","Hazel/Green Blue","Yellow/Beige Red","Yellow/Beige Green","Yellow/Beige Blue","Gray Red","Gray Green","Gray Blue","Blue Red","Blue Green","Blue Blue","Overall Red","Overall Green","Overall Blue")
+colnames(coeff)<- c("Brown Present","Hazel/Green Present","Yellow/Beige Present","Gray Present","Blue Present","Round pupils","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black in body","Black in tail","Nose black","Nose pink")
+names <- c("shadeR","shadeG","shadeB")
+#names <- c("shadeR_brown","shadeG_brown","shadeB_brown","shadeR_hazgre","shadeG_hazgre","shadeB_hazgre","shadeR_yelbei","shadeG_yelbei","shadeB_yelbei","shadeR_gray","shadeG_gray","shadeB_gray","shadeR_blue","shadeG_blue","shadeB_blue","shadeR_all","shadeG_all","shadeB_all")
+names2 <- c("brown_pres","hazgre_pres","yelbei_pres","grey_pres","blue_pres","Pupil_type_revised_bin","Nocturnal","Crepuscular","Diurnal","Ethiopian","Oriental","Palearctic","Neotropical","Nearctic","Desert","Savanna","Forest","Rainforest","Mountains","Flecks","Uniform","Stripes","Rosettes","Blotches","SBlotch","Black_body_morethaneye","Black_tail_morethaneye","Nose_black","Nose_pink")
+
+gen_dat_brown_top <- gen_dat2 %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_short$tip.label) %>% mutate(avg_R = (brown_light_R+brown_med_R+brown_dark_R)/3)  %>% mutate(avg_G = (brown_light_G+brown_med_G+brown_dark_G)/3)  %>% mutate(avg_B = (brown_light_B+brown_med_B+brown_dark_B)/3) 
+
+gen_dat_brown_top <- gen_dat_brown_top %>% mutate(shadeR = ifelse(gen_dat_brown_top$avg_R < getJenksBreaks(gen_dat_brown_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_brown_top$avg_G < getJenksBreaks(gen_dat_brown_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_brown_top$avg_B < getJenksBreaks(gen_dat_brown_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_gray_top <- gen_dat2 %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_short$tip.label) %>% mutate(avg_R = (gray_light_R+gray_med_R+gray_dark_R)/3)  %>% mutate(avg_G = (gray_light_G+gray_med_G+gray_dark_G)/3)  %>% mutate(avg_B = (gray_light_B+gray_med_B+gray_dark_B)/3) 
+
+gen_dat_gray_top <- gen_dat_gray_top %>% mutate(shadeR = ifelse(gen_dat_gray_top$avg_R < getJenksBreaks(gen_dat_gray_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_gray_top$avg_G < getJenksBreaks(gen_dat_gray_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_gray_top$avg_B < getJenksBreaks(gen_dat_gray_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_yelbei_top <- gen_dat2 %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_short$tip.label) %>% mutate(avg_R = (yelbei_light_R+yelbei_med_R+yelbei_dark_R)/3)  %>% mutate(avg_G = (yelbei_light_G+yelbei_med_G+yelbei_dark_G)/3)  %>% mutate(avg_B = (yelbei_light_B+yelbei_med_B+yelbei_dark_B)/3) 
+
+gen_dat_yelbei_top <- gen_dat_yelbei_top %>% mutate(shadeR = ifelse(gen_dat_yelbei_top$avg_R < getJenksBreaks(gen_dat_yelbei_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_yelbei_top$avg_G < getJenksBreaks(gen_dat_yelbei_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_yelbei_top$avg_B < getJenksBreaks(gen_dat_yelbei_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_hazgre_top <- gen_dat2 %>% select(Rename,hazgre_col_num,hazgre_light_R,hazgre_light_G,hazgre_light_B,hazgre_med_R,hazgre_med_G,hazgre_med_B,hazgre_dark_R,hazgre_dark_G,hazgre_dark_B) %>% filter(Rename %in% mytr_hazgre_short$tip.label) %>% mutate(avg_R = (hazgre_light_R+hazgre_med_R+hazgre_dark_R)/3)  %>% mutate(avg_G = (hazgre_light_G+hazgre_med_G+hazgre_dark_G)/3)  %>% mutate(avg_B = (hazgre_light_B+hazgre_med_B+hazgre_dark_B)/3) 
+
+gen_dat_hazgre_top <- gen_dat_hazgre_top %>% mutate(shadeR = ifelse(gen_dat_hazgre_top$avg_R < getJenksBreaks(gen_dat_hazgre_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_hazgre_top$avg_G < getJenksBreaks(gen_dat_hazgre_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_hazgre_top$avg_B < getJenksBreaks(gen_dat_hazgre_top$avg_B, 3)[2], 0, 1))
+
+gen_dat_blue_top <- gen_dat2 %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_short$tip.label) %>% mutate(avg_R = (blue_light_R+blue_med_R+blue_dark_R)/3)  %>% mutate(avg_G = (blue_light_G+blue_med_G+blue_dark_G)/3)  %>% mutate(avg_B = (blue_light_B+blue_med_B+blue_dark_B)/3) 
+
+gen_dat_blue_top <- gen_dat_blue_top %>% mutate(shadeR = ifelse(gen_dat_blue_top$avg_R < getJenksBreaks(gen_dat_blue_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_blue_top$avg_G < getJenksBreaks(gen_dat_blue_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_blue_top$avg_B < getJenksBreaks(gen_dat_blue_top$avg_B, 3)[2], 0, 1))
+
+
+gen_dat_all_top <- gen_dat2 %>%  rowwise() %>% mutate(avg_R = mean(c(brown_light_R,brown_med_R,brown_dark_R,hazgre_light_R,hazgre_med_R,hazgre_dark_R,yelbei_light_R,yelbei_med_R,yelbei_dark_R,gray_light_R,gray_med_R,gray_dark_R,blue_light_R,blue_med_R,blue_dark_R), na.rm = TRUE))  %>% mutate(avg_G = mean(c(brown_light_G,brown_med_G,brown_dark_G,hazgre_light_G,hazgre_med_G,hazgre_dark_G,yelbei_light_G,yelbei_med_G,yelbei_dark_G,gray_light_G,gray_med_G,gray_dark_G,blue_light_G,blue_med_G,blue_dark_G), na.rm = TRUE)) %>% mutate(avg_B = mean(c(brown_light_B,brown_med_B,blue_dark_B,hazgre_light_B,hazgre_med_B,hazgre_dark_B,yelbei_light_B,yelbei_med_B,yelbei_dark_B,gray_light_B,gray_med_B,gray_dark_B,blue_light_B,blue_med_B,blue_dark_B), na.rm = TRUE))
+
+gen_dat_all_top <- gen_dat_all_top %>% ungroup() %>% mutate(shadeR = ifelse(gen_dat_all_top$avg_R < getJenksBreaks(gen_dat_all_top$avg_R, 3)[2], 0, 1)) %>% mutate(shadeG = ifelse(gen_dat_all_top$avg_G < getJenksBreaks(gen_dat_all_top$avg_G, 3)[2], 0, 1)) %>% mutate(shadeB = ifelse(gen_dat_all_top$avg_B < getJenksBreaks(gen_dat_all_top$avg_B, 3)[2], 0, 1))
+
+groups <- list(gen_dat_brown_top,gen_dat_hazgre_top,gen_dat_yelbei_top,gen_dat_gray_top,gen_dat_blue_top,gen_dat_all_top)
+
+trees <- list(mytr_brown_short,mytr_hazgre_short,mytr_yelbei_short,mytr_gray_short,mytr_blue_short,mytr_short)
+
+setwd("~/Desktop/BayesTraitsV3.0.5-OSX") 
+
+for (i in 1:6) {
+  for (k in 1:3){
+    for (j in 1:29){
+      col1 <- groups[[i]] %>% select(Rename,names[k])
+      if (j < 6){
+        col2 <- gen_dat %>% select(Rename,names2[j])
+      } else {
+        col2 <- enviro_dat %>% select(Rename,names2[j]) 
+      }
+      merged <- merge(col1, col2, by = "Rename")
+      merged <- merged[,-1]
+      if (length(merged[,2])!=sum(merged[,2]) & sum(merged[,2]!=0)){
+        temp <- tetrachoric(merged,correct=FALSE)
+        coeff[k+(i-1)*3,j] <- temp$rho[2]
+      } else if (sum(merged[,2]==0)){
+        coeff[k+(i-1)*3,j] <- -1
+      } else {
+        coeff[k+(i-1)*3,j] <- 1
+      }
+    }
+  }
+}
+coeff
+```
+
+```{r}
+# convert into a better format
+pcm <- melt(corr)
+pcm2 <- melt(coeff)
+pcm$coeff <- pcm2[,3]
+pcm
+```
+
+```{r}
+# plot it!
+xx = ggplot(pcm, aes(x = Var1, y = Var2))+
+  geom_point(aes(size = abs(coeff),fill=ifelse(value<2,"temp",ifelse(coeff > 0,'Positive','Negative')), alpha = ifelse(value<2,0,0.3+(value))), shape = 21) + 
+  scale_size_continuous(name = "Correlation",limits = c(0, 1), breaks = c(0.25,0.5,0.75,1)) + labs( x= "", y = "", size = "Correlation", fill = "Association",alpha="Bayes Factor") + theme_bw() + theme_linedraw() + theme(panel.background = element_blank(), axis.text.x = element_text(angle = 30,hjust = 1)) + scale_fill_manual(values = c("#D55E00","#009E73"),limits = c('Negative', 'Positive')) + scale_alpha_continuous(name = "Bayes Factor",limits = c(0, 10), breaks = c(0,2,5,10))
+
+xx
+```
+
+```{r}
+# save it!
+ggsave("test.png",xx)
+```
+
+
