@@ -1,0 +1,771 @@
+---
+title: 'Quantitative Color Reconstruction'
+output: html_document
+---
+
+```{r}
+# load packages
+library(phytools)
+library(corHMM)
+library(expm)
+library(dplyr)
+library(plotrix)
+```
+
+```{r}
+# read in tree
+tree <- read.nexus("Carnivore_phylo_Nyakatura2012.NEX")
+mytr <- tree$carnivoreST_bestEstimate
+is.ultrametric(mytr)
+
+# subset just to felids (and outgroup)
+mytr_felids <- keep.tip(mytr, c("Crocuta_crocuta","Genetta_genetta","Vulpes_zerda","Acinonyx_jubatus","Puma_concolor","Puma_yagouaroundi","Lynx_canadensis","Lynx_lynx","Lynx_pardinus","Lynx_rufus","Felis_bieti","Felis_silvestris","Felis_margarita","Felis_chaus","Felis_nigripes","Prionailurus_bengalensis","Prionailurus_iriomotensis","Prionailurus_viverrinus","Prionailurus_planiceps","Prionailurus_rubiginosus","Felis_manul","Leopardus_colocolo","Leopardus_geoffroyi","Leopardus_guigna","Leopardus_tigrinus","Leopardus_pardalis","Leopardus_wiedii","Leopardus_jacobitus","Catopuma_badia","Catopuma_temminckii","Pardofelis_marmorata","Caracal_caracal","Profelis_aurata","Leptailurus_serval","Neofelis_nebulosa","Panthera_leo","Panthera_pardus","Panthera_onca","Panthera_tigris","Uncia_uncia","Prionodon_linsang"))
+
+# replace outdated species names with more current ones
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Uncia_uncia")] <- "Panthera_uncia"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_bengalensis")] <- "Prionailurus_bengalensis_bengalensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_iriomotensis")] <- "Prionailurus_bengalensis_iriomotensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Felis_manul")] <- "Otocolobus_manul"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Puma_yagouaroundi")] <- "Herpailurus_yagouaroundi"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_jacobitus")] <- "Leopardus_jacobita"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_colocolo")] <- "Leopardus_colocola_pajeros"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Profelis_aurata")] <- "Caracal_aurata"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_pardalis")] <- "Leopardus_pardalis_pardalis"
+
+# add node labels
+mytr_felids <- makeNodeLabel(mytr_felids, method = "number", prefix = "Node")
+```
+
+```{r}
+# 5 trees, for each color
+mytr_brown_short <- drop.tip(mytr_felids, c("Panthera_uncia","Panthera_tigris","Panthera_pardus","Panthera_onca","Catopuma_badia","Caracal_aurata","Otocolobus_manul","Prionailurus_viverrinus","Felis_chaus","Felis_nigripes","Felis_margarita","Felis_bieti","Felis_silvestris"),trim.internal = TRUE)
+mytr_gray_short <- drop.tip(mytr_felids, c("Crocuta_crocuta","Genetta_genetta","Vulpes_zerda","Prionodon_linsang","Pardofelis_marmorata","Catopuma_badia","Leopardus_wiedii","Leopardus_jacobita","Leopardus_tigrinus","Leopardus_guigna","Lynx_canadensis","Acinonyx_jubatus","Prionailurus_bengalensis_iriomotensis","Felis_nigripes"), trim.internal = TRUE)
+mytr_yelbei_short <- keep.tip(mytr_felids, c("Panthera_tigris","Panthera_pardus","Panthera_onca","Panthera_leo","Catopuma_badia","Lynx_canadensis","Lynx_lynx","Acinonyx_jubatus","Puma_concolor","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Felis_nigripes","Lynx_pardinus"))
+mytr_hazgre_short <- keep.tip(mytr_felids, c("Panthera_uncia","Panthera_tigris","Panthera_pardus","Panthera_onca","Caracal_caracal","Leopardus_pardalis_pardalis","Leopardus_jacobita","Leopardus_geoffroyi","Lynx_lynx","Lynx_pardinus","Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_viverrinus","Felis_chaus","Felis_nigripes","Felis_margarita","Felis_silvestris"))
+mytr_blue_short <- keep.tip(mytr_felids, c("Panthera_uncia","Panthera_tigris","Panthera_pardus","Lynx_rufus","Felis_bieti","Felis_silvestris"))
+```
+
+# reconstruction for top of the tree brown short
+```{r}
+# light brown
+mytr_brown_top <- drop.tip(mytr_brown_short, c("Panthera_leo"), trim.internal = TRUE)
+gen_dat <- read.csv("general_data_reordered.csv")
+gen_dat_brown_top <- gen_dat %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_top$tip.label)
+gen_dat_brown_top_justpriR <- gen_dat_brown_top %>% select(Rename,brown_light_R)
+gen_dat_brown_top_justpriR <- setNames(gen_dat_brown_top_justpriR$brown_light_R,gen_dat_brown_top_justpriR$Rename)
+
+gen_dat_brown_top_justpriG <- gen_dat_brown_top %>% select(Rename,brown_light_G)
+gen_dat_brown_top_justpriG <- setNames(gen_dat_brown_top_justpriG$brown_light_G,gen_dat_brown_top_justpriG$Rename)
+
+gen_dat_brown_top_justpriB <- gen_dat_brown_top %>% select(Rename,brown_light_B)
+gen_dat_brown_top_justpriB <- setNames(gen_dat_brown_top_justpriB$brown_light_B,gen_dat_brown_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_brown_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_brown_top_just_col_num <- gen_dat_brown_top %>% select(Rename,brown_col_num)
+col_num <- rayDISC(mytr_brown_top,gen_dat_brown_top_just_col_num,model="ER",node.states="marginal")
+plotRECON(mytr_brown_top,col_num$states,piecolors=c("white","grey","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_brown_top$node.label,temp, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium brown
+mytr_brown_top <- drop.tip(mytr_brown_short, c("Panthera_leo"), trim.internal = TRUE)
+
+gen_dat_brown_top <- gen_dat %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_top$tip.label)
+
+gen_dat_brown_top_justpriR <- gen_dat_brown_top %>% select(Rename,brown_med_R)
+gen_dat_brown_top_justpriR <- setNames(gen_dat_brown_top_justpriR$brown_med_R,gen_dat_brown_top_justpriR$Rename)
+
+gen_dat_brown_top_justpriG <- gen_dat_brown_top %>% select(Rename,brown_med_G)
+gen_dat_brown_top_justpriG <- setNames(gen_dat_brown_top_justpriG$brown_med_G,gen_dat_brown_top_justpriG$Rename)
+
+gen_dat_brown_top_justpriB <- gen_dat_brown_top %>% select(Rename,brown_med_B)
+gen_dat_brown_top_justpriB <- setNames(gen_dat_brown_top_justpriB$brown_med_B,gen_dat_brown_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_brown_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark brown
+mytr_brown_top <- drop.tip(mytr_brown_short, c("Panthera_leo"), trim.internal = TRUE)
+
+gen_dat_brown_top <- gen_dat %>% select(Rename,brown_col_num,brown_light_R,brown_light_G,brown_light_B,brown_med_R,brown_med_G,brown_med_B,brown_dark_R,brown_dark_G,brown_dark_B,brown_excl_R,brown_excl_G,brown_excl_B) %>% filter(Rename %in% mytr_brown_top$tip.label)
+
+gen_dat_brown_top_justpriR <- gen_dat_brown_top %>% select(Rename,brown_dark_R)
+gen_dat_brown_top_justpriR <- setNames(gen_dat_brown_top_justpriR$brown_dark_R,gen_dat_brown_top_justpriR$Rename)
+
+gen_dat_brown_top_justpriG <- gen_dat_brown_top %>% select(Rename,brown_dark_G)
+gen_dat_brown_top_justpriG <- setNames(gen_dat_brown_top_justpriG$brown_dark_G,gen_dat_brown_top_justpriG$Rename)
+
+gen_dat_brown_top_justpriB <- gen_dat_brown_top %>% select(Rename,brown_dark_B)
+gen_dat_brown_top_justpriB <- setNames(gen_dat_brown_top_justpriB$brown_dark_B,gen_dat_brown_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_brown_top,gen_dat_brown_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_brown_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+mytr_brown_top <- drop.tip(mytr_brown_short, c("Panthera_leo","Puma_concolor"), trim.internal = TRUE) # also drop the animals with 4 eye colors
+gen_dat_brown_top_just_pri <- gen_dat %>% select(Rename,brown_pri) %>% filter(Rename %in% mytr_brown_top$tip.label)
+gen_dat_brown_top_just_sec<- gen_dat %>% select(Rename,brown_sec) %>% filter(Rename %in% mytr_brown_top$tip.label)
+brown_pri <- rayDISC(mytr_brown_top,gen_dat_brown_top_just_pri,model="ER",node.states="marginal")
+brown_sec <- rayDISC(mytr_brown_top,gen_dat_brown_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_brown_top,brown_pri$states,piecolors=c("black","white","grey"))
+plotRECON(mytr_brown_top,brown_sec$states,piecolors=c("black","white","grey"))
+temp1 <- data.frame(brown_pri$states)
+temp1 <-temp1 %>% mutate(brown_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(brown_sec$states)
+temp2 <-temp2 %>% mutate(brown_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_brown_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```
+
+
+# reconstruction for top of the tree gray 
+```{r}
+# light gray
+mytr_gray_top <- mytr_gray_short
+gen_dat <- read.csv("general_data_reordered.csv")
+gen_dat_gray_top <- gen_dat %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_top$tip.label)
+gen_dat_gray_top_justpriR <- gen_dat_gray_top %>% select(Rename,gray_light_R)
+gen_dat_gray_top_justpriR <- setNames(gen_dat_gray_top_justpriR$gray_light_R,gen_dat_gray_top_justpriR$Rename)
+
+gen_dat_gray_top_justpriG <- gen_dat_gray_top %>% select(Rename,gray_light_G)
+gen_dat_gray_top_justpriG <- setNames(gen_dat_gray_top_justpriG$gray_light_G,gen_dat_gray_top_justpriG$Rename)
+
+gen_dat_gray_top_justpriB <- gen_dat_gray_top %>% select(Rename,gray_light_B)
+gen_dat_gray_top_justpriB <- setNames(gen_dat_gray_top_justpriB$gray_light_B,gen_dat_gray_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_gray_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_gray_top_just_col_num <- gen_dat_gray_top %>% select(Rename,gray_col_num)
+col_num <- rayDISC(mytr_gray_top,gen_dat_gray_top_just_col_num,model="ER",node.states="marginal")
+plotRECON(mytr_gray_top,col_num$states,piecolors=c("white","gray","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_gray_top$node.label,temp, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium gray
+
+gen_dat_gray_top <- gen_dat %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_top$tip.label)
+
+gen_dat_gray_top_justpriR <- gen_dat_gray_top %>% select(Rename,gray_med_R)
+gen_dat_gray_top_justpriR <- setNames(gen_dat_gray_top_justpriR$gray_med_R,gen_dat_gray_top_justpriR$Rename)
+
+gen_dat_gray_top_justpriG <- gen_dat_gray_top %>% select(Rename,gray_med_G)
+gen_dat_gray_top_justpriG <- setNames(gen_dat_gray_top_justpriG$gray_med_G,gen_dat_gray_top_justpriG$Rename)
+
+gen_dat_gray_top_justpriB <- gen_dat_gray_top %>% select(Rename,gray_med_B)
+gen_dat_gray_top_justpriB <- setNames(gen_dat_gray_top_justpriB$gray_med_B,gen_dat_gray_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_gray_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark gray
+gen_dat_gray_top <- gen_dat %>% select(Rename,gray_col_num,gray_light_R,gray_light_G,gray_light_B,gray_med_R,gray_med_G,gray_med_B,gray_dark_R,gray_dark_G,gray_dark_B,gray_excl_R,gray_excl_G,gray_excl_B) %>% filter(Rename %in% mytr_gray_top$tip.label)
+
+gen_dat_gray_top_justpriR <- gen_dat_gray_top %>% select(Rename,gray_dark_R)
+gen_dat_gray_top_justpriR <- setNames(gen_dat_gray_top_justpriR$gray_dark_R,gen_dat_gray_top_justpriR$Rename)
+
+gen_dat_gray_top_justpriG <- gen_dat_gray_top %>% select(Rename,gray_dark_G)
+gen_dat_gray_top_justpriG <- setNames(gen_dat_gray_top_justpriG$gray_dark_G,gen_dat_gray_top_justpriG$Rename)
+
+gen_dat_gray_top_justpriB <- gen_dat_gray_top %>% select(Rename,gray_dark_B)
+gen_dat_gray_top_justpriB <- setNames(gen_dat_gray_top_justpriB$gray_dark_B,gen_dat_gray_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_gray_top,gen_dat_gray_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_gray_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+gen_dat_gray_top_just_pri <- gen_dat %>% select(Rename,gray_pri) %>% filter(Rename %in% mytr_gray_top$tip.label)
+gen_dat_gray_top_just_sec<- gen_dat %>% select(Rename,gray_sec) %>% filter(Rename %in% mytr_gray_top$tip.label)
+gray_pri <- rayDISC(mytr_gray_top,gen_dat_gray_top_just_pri,model="ER",node.states="marginal")
+gray_sec <- rayDISC(mytr_gray_top,gen_dat_gray_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_gray_top,gray_pri$states,piecolors=c("black","white","gray"))
+plotRECON(mytr_gray_top,gray_sec$states,piecolors=c("black","white","gray"))
+temp1 <- data.frame(gray_pri$states)
+temp1 <-temp1 %>% mutate(gray_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(gray_sec$states)
+temp2 <-temp2 %>% mutate(gray_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_gray_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```
+
+# reconstruction for panthera yelbei 
+```{r}
+# light yelbei
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Panthera_tigris","Panthera_onca","Panthera_pardus","Panthera_leo"))
+gen_dat <- read.csv("general_data_reordered.csv")
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_light_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_light_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_light_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_yelbei_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_yelbei_top_just_col_num <- gen_dat_yelbei_top %>% select(Rename,yelbei_col_num)
+col_num <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_col_num,model="ER",node.states="marginal")
+plotRECON(mytr_yelbei_top,col_num$states,piecolors=c("white","gray","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label,temp, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium yelbei
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Panthera_tigris","Panthera_onca","Panthera_pardus","Panthera_leo"))
+
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_med_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_med_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_med_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark yelbei
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Panthera_tigris","Panthera_onca","Panthera_pardus","Panthera_leo"))
+
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_dark_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_dark_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_dark_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Panthera_tigris","Panthera_onca","Panthera_pardus","Panthera_leo"))
+gen_dat_yelbei_top_just_pri <- gen_dat %>% select(Rename,yelbei_pri) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+gen_dat_yelbei_top_just_sec<- gen_dat %>% select(Rename,yelbei_sec) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+yelbei_pri <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_pri,model="ER",node.states="marginal")
+yelbei_sec <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_yelbei_top,yelbei_pri$states,piecolors=c("black","white","gray"))
+plotRECON(mytr_yelbei_top,yelbei_sec$states,piecolors=c("black","white","gray"))
+temp1 <- data.frame(yelbei_pri$states)
+temp1 <-temp1 %>% mutate(yelbei_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(yelbei_sec$states)
+temp2 <-temp2 %>% mutate(yelbei_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```
+
+# reconstruction for Lynx and Leopard Cat yelbei 
+```{r}
+# light yelbei
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Lynx_pardinus","Lynx_lynx","Lynx_canadensis","Puma_concolor","Acinonyx_jubatus"))
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_light_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_light_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_light_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_light_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_yelbei_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_yelbei_top_just_col_num <- gen_dat_yelbei_top %>% select(Rename,yelbei_col_num)
+col_num <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_col_num,model="ER",node.states="marginal")
+plotRECON(mytr_yelbei_top,col_num$states,piecolors=c("white","gray","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label,temp,fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium yelbei
+mytr_yelbei_top <- keep.tip(mytr_yelbei_short, c("Otocolobus_manul","Prionailurus_rubiginosus","Prionailurus_bengalensis_iriomotensis","Prionailurus_bengalensis_bengalensis","Lynx_pardinus","Lynx_lynx","Lynx_canadensis","Puma_concolor","Acinonyx_jubatus"))
+
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_med_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_med_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_med_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_med_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark yelbei
+
+gen_dat_yelbei_top <- gen_dat %>% select(Rename,yelbei_col_num,yelbei_light_R,yelbei_light_G,yelbei_light_B,yelbei_med_R,yelbei_med_G,yelbei_med_B,yelbei_dark_R,yelbei_dark_G,yelbei_dark_B) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+
+gen_dat_yelbei_top_justpriR <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_R)
+gen_dat_yelbei_top_justpriR <- setNames(gen_dat_yelbei_top_justpriR$yelbei_dark_R,gen_dat_yelbei_top_justpriR$Rename)
+
+gen_dat_yelbei_top_justpriG <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_G)
+gen_dat_yelbei_top_justpriG <- setNames(gen_dat_yelbei_top_justpriG$yelbei_dark_G,gen_dat_yelbei_top_justpriG$Rename)
+
+gen_dat_yelbei_top_justpriB <- gen_dat_yelbei_top %>% select(Rename,yelbei_dark_B)
+gen_dat_yelbei_top_justpriB <- setNames(gen_dat_yelbei_top_justpriB$yelbei_dark_B,gen_dat_yelbei_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_yelbei_top,gen_dat_yelbei_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+
+gen_dat_yelbei_top_just_pri <- gen_dat %>% select(Rename,yelbei_pri) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+gen_dat_yelbei_top_just_sec<- gen_dat %>% select(Rename,yelbei_sec) %>% filter(Rename %in% mytr_yelbei_top$tip.label)
+yelbei_pri <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_pri,model="ER",node.states="marginal")
+yelbei_sec <- rayDISC(mytr_yelbei_top,gen_dat_yelbei_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_yelbei_top,yelbei_pri$states,piecolors=c("black","white","gray"))
+plotRECON(mytr_yelbei_top,yelbei_sec$states,piecolors=c("black","white","gray"))
+temp1 <- data.frame(yelbei_pri$states)
+temp1 <-temp1 %>% mutate(yelbei_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(yelbei_sec$states)
+temp2 <-temp2 %>% mutate(yelbei_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_yelbei_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```
+
+
+# reconstruction for panthera blue 
+```{r}
+# light blue
+mytr_blue_top <- keep.tip(mytr_blue_short, c("Panthera_uncia","Panthera_tigris"))
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_light_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_light_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_light_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_light_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_light_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_light_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_blue_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_blue_top_just_col_num <- gen_dat_blue_top %>% select(Rename,blue_col_num)
+col_num <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_col_num,model="ER",node.states="marginal")
+#plotRECON(mytr_blue_top,col_num$states,piecolors=c("white","gray","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label,fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium blue
+
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_med_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_med_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_med_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_med_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_med_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_med_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark blue
+
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_dark_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_dark_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_dark_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_dark_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_dark_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_dark_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+
+gen_dat_blue_top_just_pri <- gen_dat %>% select(Rename,blue_pri) %>% filter(Rename %in% mytr_blue_top$tip.label)
+gen_dat_blue_top_just_sec<- gen_dat %>% select(Rename,blue_sec) %>% filter(Rename %in% mytr_blue_top$tip.label)
+blue_pri <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_pri,model="ER",node.states="marginal")
+blue_sec <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_blue_top,blue_pri$states,piecolors=c("black","white","gray"))
+plotRECON(mytr_blue_top,blue_sec$states,piecolors=c("black","white","gray"))
+temp1 <- data.frame(blue_pri$states)
+temp1 <-temp1 %>% mutate(blue_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(blue_sec$states)
+temp2 <-temp2 %>% mutate(blue_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```
+
+# reconstruction for felis blue 
+```{r}
+# light blue
+mytr_blue_top <- keep.tip(mytr_blue_short, c("Felis_bieti","Felis_silvestris"))
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_light_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_light_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_light_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_light_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_light_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_light_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+plot(mytr_blue_top, show.node.label = TRUE)
+```
+
+```{r}
+# reconstruct the number of colors in each eye
+gen_dat_blue_top_just_col_num <- gen_dat_blue_top %>% select(Rename,blue_col_num)
+col_num <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_col_num,model="ER",node.states="marginal")
+plotRECON(mytr_blue_top,col_num$states,piecolors=c("white","gray","black"))
+temp <- data.frame(col_num$states)
+temp <-temp %>% mutate(col_num=names(.)[max.col(.)])
+temp <- temp[,ncol(temp)]
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label,fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# medium blue
+mytr_blue_top <- keep.tip(mytr_blue_short, c("Felis_bieti","Felis_silvestris"))
+
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_med_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_med_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_med_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_med_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_med_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_med_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# dark blue
+mytr_blue_top <- keep.tip(mytr_blue_short, c("Felis_bieti","Felis_silvestris"))
+
+gen_dat_blue_top <- gen_dat %>% select(Rename,blue_col_num,blue_light_R,blue_light_G,blue_light_B,blue_med_R,blue_med_G,blue_med_B,blue_dark_R,blue_dark_G,blue_dark_B) %>% filter(Rename %in% mytr_blue_top$tip.label)
+
+gen_dat_blue_top_justpriR <- gen_dat_blue_top %>% select(Rename,blue_dark_R)
+gen_dat_blue_top_justpriR <- setNames(gen_dat_blue_top_justpriR$blue_dark_R,gen_dat_blue_top_justpriR$Rename)
+
+gen_dat_blue_top_justpriG <- gen_dat_blue_top %>% select(Rename,blue_dark_G)
+gen_dat_blue_top_justpriG <- setNames(gen_dat_blue_top_justpriG$blue_dark_G,gen_dat_blue_top_justpriG$Rename)
+
+gen_dat_blue_top_justpriB <- gen_dat_blue_top %>% select(Rename,blue_dark_B)
+gen_dat_blue_top_justpriB <- setNames(gen_dat_blue_top_justpriB$blue_dark_B,gen_dat_blue_top_justpriB$Rename)
+
+fitR<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriR,vars=TRUE,CI=TRUE)
+print(fitR,printlen=10)
+
+fitG<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriG,vars=TRUE,CI=TRUE)
+print(fitG,printlen=10)
+
+fitB<-fastAnc(mytr_blue_top,gen_dat_blue_top_justpriB,vars=TRUE,CI=TRUE)
+print(fitB,printlen=10)
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label, fitR$ace,fitG$ace,fitB$ace)
+write.csv(frame,"tempdata.csv")
+```
+
+```{r}
+# reconstruct the primary and secondary colors in each eye
+mytr_blue_top <- keep.tip(mytr_blue_short, c("Felis_bieti","Felis_silvestris"))
+
+gen_dat_blue_top_just_pri <- gen_dat %>% select(Rename,blue_pri) %>% filter(Rename %in% mytr_blue_top$tip.label)
+gen_dat_blue_top_just_sec<- gen_dat %>% select(Rename,blue_sec) %>% filter(Rename %in% mytr_blue_top$tip.label)
+blue_pri <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_pri,model="ER",node.states="marginal")
+blue_sec <- rayDISC(mytr_blue_top,gen_dat_blue_top_just_sec,model="ER",node.states="marginal")
+plotRECON(mytr_blue_top,blue_pri$states,piecolors=c("black","white","gray"))
+plotRECON(mytr_blue_top,blue_sec$states,piecolors=c("black","white","gray"))
+temp1 <- data.frame(blue_pri$states)
+temp1 <-temp1 %>% mutate(blue_pri=names(.)[max.col(.)])
+temp1 <- temp1[,ncol(temp1)]
+
+temp2 <- data.frame(blue_sec$states)
+temp2 <-temp2 %>% mutate(blue_sec=names(.)[max.col(.)])
+temp2 <- temp2[,ncol(temp2)]
+
+
+# put data in an exportable format
+frame <- data.frame(mytr_blue_top$node.label,temp1,temp2)
+write.csv(frame,"tempdata.csv")
+```

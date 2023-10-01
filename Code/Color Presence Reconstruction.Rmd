@@ -1,0 +1,640 @@
+---
+title: "Felid Color Presence Reconstruction"
+output: html_document
+---
+
+```{r}
+# load packages
+library(phytools)
+library(corHMM)
+library(expm)
+library(ape)
+library(dplyr)
+library(plotrix)
+library(windex)
+```
+
+```{r}
+# read in tree
+tree <- read.nexus("Carnivore_phylo_Nyakatura2012.NEX")
+tree
+```
+
+```{r}
+# take best tree and check if it is ultrametric
+mytr <- tree$carnivoreST_bestEstimate
+is.ultrametric(mytr)
+mytr
+```
+
+```{r}
+# subset just to felids (and outgroups)
+mytr_felids <- keep.tip(mytr, c("Crocuta_crocuta","Genetta_genetta","Vulpes_zerda","Acinonyx_jubatus","Puma_concolor","Puma_yagouaroundi","Lynx_canadensis","Lynx_lynx","Lynx_pardinus","Lynx_rufus","Felis_bieti","Felis_silvestris","Felis_margarita","Felis_chaus","Felis_nigripes","Prionailurus_bengalensis","Prionailurus_iriomotensis","Prionailurus_viverrinus","Prionailurus_planiceps","Prionailurus_rubiginosus","Felis_manul","Leopardus_colocolo","Leopardus_geoffroyi","Leopardus_guigna","Leopardus_tigrinus","Leopardus_pardalis","Leopardus_wiedii","Leopardus_jacobitus","Catopuma_badia","Catopuma_temminckii","Pardofelis_marmorata","Caracal_caracal","Profelis_aurata","Leptailurus_serval","Neofelis_nebulosa","Panthera_leo","Panthera_pardus","Panthera_onca","Panthera_tigris","Uncia_uncia","Prionodon_linsang"))
+```
+
+```{r}
+# replace outdated species names with more current ones
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Uncia_uncia")] <- "Panthera_uncia"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_bengalensis")] <- "Prionailurus_bengalensis_bengalensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_iriomotensis")] <- "Prionailurus_bengalensis_iriomotensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Felis_manul")] <- "Otocolobus_manul"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Puma_yagouaroundi")] <- "Herpailurus_yagouaroundi"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_jacobitus")] <- "Leopardus_jacobita"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_colocolo")] <- "Leopardus_colocola_pajeros"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Profelis_aurata")] <- "Caracal_aurata"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_pardalis")] <- "Leopardus_pardalis_pardalis"
+
+
+# for now, w/out subspecies
+#mytr_felids$tip.label[which(mytr_felids$tip.label == "Felis_chaus")] <- "Felis_chaus_chaus"
+#mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_pardus")] <- "Panthera_pardus_fusca"
+#mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_leo")] <- "Panthera_leo_leo"
+#mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_tigris")] <- "Panthera_tigris_tigris_tigris"
+```
+
+```{r}
+plot(mytr_felids, show.tip.label = TRUE)
+add.scale.bar()
+
+# below if you want to save blank phylogeny
+# png("image.png",width=3500,height=3000)
+# plot(mytr_felids, show.tip.label = TRUE, use.edge.length = FALSE, label.offset = 3, cex=3)
+# dev.off()
+# mytr_felids <- makeNodeLabel(mytr_felids, method = "number", prefix = "Node")
+# plot(mytr_felids, show.node.label = TRUE,show.tip.label = TRUE)
+```
+
+```{r}
+# make phylogeny with color states
+col_dat <- read.csv(file = 'col_data_nosub.csv') # using no subspecies data; to do the same analysis with just the most common eye colors, use "dom_col_data_nosub.csv" 
+plot(mytr_felids, show.tip.label = TRUE, label.offset = 5)
+col_dat.sort <- data.frame(col_dat[, 2], col_dat[, 3],col_dat[, 4],col_dat[, 5],col_dat[, 6], row.names = col_dat[, 1])
+add.scale.bar()
+col_dat.sort <- col_dat.sort[mytr_felids$tip.label, ]
+tiplabels(pch = 16, col = col_dat.sort[, 1] * 1)
+tiplabels(pch = 16, col = col_dat.sort[, 2] * 3, offset=1)
+tiplabels(pch = 16, col = col_dat.sort[, 3] * 7, offset=2)
+tiplabels(pch = 16, col = col_dat.sort[, 4] * 8, offset=3)
+tiplabels(pch = 16, col = col_dat.sort[, 5] * 4, offset=4)
+add.scale.bar()
+```
+
+```{r}
+# check which model is best for each color
+brown <- col_dat %>% dplyr::select(1, 2)
+hazgre <- col_dat %>% dplyr::select(1, 3)
+yelbei <- col_dat %>% dplyr::select(1, 4)
+grey <- col_dat %>% dplyr::select(1, 5)
+blue <- col_dat %>% dplyr::select(1, 6)
+
+brown_ard <- rayDISC(mytr_felids,brown,model="ARD",node.states="marginal")
+brown_er <- rayDISC(mytr_felids,brown,model="ER",node.states="marginal")
+modSel.rayDISC(brown_ard,brown_er,type="AICc")
+
+hazgre_ard <- rayDISC(mytr_felids,hazgre,model="ARD",node.states="marginal")
+hazgre_er <- rayDISC(mytr_felids,hazgre,model="ER",node.states="marginal")
+modSel.rayDISC(hazgre_ard,hazgre_er,type="AICc")
+
+yelbei_ard <- rayDISC(mytr_felids,yelbei,model="ARD",node.states="marginal")
+yelbei_er <- rayDISC(mytr_felids,yelbei,model="ER",node.states="marginal")
+modSel.rayDISC(yelbei_ard,yelbei_er,type="AICc")
+
+grey_ard <- rayDISC(mytr_felids,grey,model="ARD",node.states="marginal")
+grey_er <- rayDISC(mytr_felids,grey,model="ER",node.states="marginal")
+modSel.rayDISC(grey_ard,grey_er,type="AICc")
+
+blue_ard <- rayDISC(mytr_felids,blue,model="ARD",node.states="marginal")
+blue_er <- rayDISC(mytr_felids,blue,model="ER",node.states="marginal")
+modSel.rayDISC(blue_ard,blue_er,type="AICc")
+```
+
+```{r}
+# make a version of plotRECON that has the legend at the bottom
+plotRECON_leg <- function (phy, likelihoods, piecolors = NULL, cex = 0.5, pie.cex = 0.25, 
+  file = NULL, height = 11, width = 8.5, show.tip.label = TRUE, 
+  title = NULL, ...) 
+{
+  if (is.null(piecolors)) {
+    piecolors = c("white", "black", "red", "yellow", "forestgreen", 
+      "blue", "coral", "aquamarine", "darkorchid", "gold", 
+      "grey", "yellow", "#3288BD", "#E31A1C")
+  }
+  if (!is.null(file)) {
+    pdf(file, height = height, width = width, useDingbats = FALSE)
+  }
+  plot(phy, cex = cex, show.tip.label = show.tip.label, ...)
+  if (!is.null(title)) {
+    title(main = title)
+  }
+  nodelabels(pie = likelihoods, piecol = piecolors, cex = pie.cex)
+  states <- colnames(likelihoods)
+  legend(x = "bottomleft", states, cex = 0.8, pt.bg = piecolors, 
+    col = "black", pch = 21)
+  if (!is.null(file)) {
+    dev.off()
+  }
+}
+```
+
+```{r}
+# rayDISC test
+recon1 <- rayDISC(mytr_felids,brown,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_felids,recon1$states,title="brown",piecolors=c("white", "burlywood4"))
+
+recon2 <- rayDISC(mytr_felids,hazgre,model="ER",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_felids,recon2$states,title="hazgre",piecolors=c("white", "green"))
+
+recon3 <- rayDISC(mytr_felids,yelbei,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_felids,recon3$states,title="yelbei",piecolors=c("white", "yellow"))
+
+recon4 <- rayDISC(mytr_felids,grey,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_felids,recon4$states,title="grey",piecolors=c("white", "grey"))
+
+recon5 <- rayDISC(mytr_felids,blue,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_felids,recon5$states,title="blue",piecolors=c("white", "blue"))
+
+```
+
+```{r}
+# plot all on the same graph
+# get nodes ready
+temp1 <- data.frame(recon1$states)
+temp1 <-temp1 %>% mutate(present= if_else(0.6 >= temp1[,2]-0.01, 0, 1))
+
+temp2 <- data.frame(recon2$states)
+temp2 <-temp2 %>% mutate(present= if_else(0.6 >= temp2[,2]-0.01, 0, 1))
+
+temp3 <- data.frame(recon3$states)
+temp3 <-temp3 %>% mutate(present= if_else(0.6 >= temp3[,2]-0.01, 0, 1))
+
+temp4 <- data.frame(recon4$states)
+temp4 <-temp4 %>% mutate(present= if_else(0.6 >= temp4[,2]-0.01, 0, 1))
+
+temp5 <- data.frame(recon5$states)
+temp5 <-temp5 %>% mutate(present= if_else(0.6 >= temp5[,2]-0.01, 0, 1))
+
+bigtemp <- data.frame(temp1$present,temp2$present,temp3$present,temp4$present,temp5$present)
+bigtemp[,2] <- bigtemp[,2] + bigtemp[,2] * 1
+bigtemp[,3] <- bigtemp[,3] + bigtemp[,3] * 2
+bigtemp[,4] <- bigtemp[,4] + bigtemp[,4] * 3
+bigtemp[,5] <- bigtemp[,5] + bigtemp[,5] * 4
+bigtemp <- data.matrix(bigtemp)
+
+# get data ready
+col_dat.sort <- data.frame(col_dat[, 2], col_dat[, 3],col_dat[, 4],col_dat[, 5],col_dat[, 6], row.names = col_dat[, 1])
+col_dat.sort <- col_dat.sort[mytr_felids$tip.label, ]
+
+col_dat.sort[,2] <- col_dat.sort[,2] + col_dat.sort[,2] * 1
+col_dat.sort[,3] <- col_dat.sort[,3] + col_dat.sort[,3] * 2
+col_dat.sort[,4] <- col_dat.sort[,4] + col_dat.sort[,4] * 3
+col_dat.sort[,5] <- col_dat.sort[,5] + col_dat.sort[,5] * 4
+col_dat.sort <- data.matrix(col_dat.sort)
+
+pdf(file = "short_recon_all.pdf", width = 20, height = 20)
+plot(mytr_felids,use.edge.length=FALSE,label.offset = 0.5)
+lastPP<-get("last_plot.phylo",envir=.PlotPhyloEnv)
+node<-(lastPP$Ntip+1):length(lastPP$xx)
+X<-lastPP$xx[node]
+Y<-lastPP$yy[node]
+h<-par()$usr[2]
+for(i in 1:length(node))
+    floating.pie(X[i],Y[i],rep(0.25,5),radius=0.005*h,
+    col=c("white","burlywood4","green","yellow","grey","blue")[bigtemp[i,]+1])
+X<-lastPP$xx[1:Ntip(mytr_felids)]
+Y<-lastPP$yy[1:Ntip(mytr_felids)]
+for(i in 1:Ntip(mytr_felids))
+    floating.pie(X[i],Y[i],rep(0.25,5),radius=0.005*h,
+    col=c("white","burlywood4","green","yellow","grey","blue")[col_dat.sort[i,]+1])
+
+dev.off()
+```
+
+
+```{r}
+# try it as a polymorphic character [not used in paper]
+poly_dat <- read.csv(file = 'poly_data_subset.csv',row.names = 1) # to do the same analysis with just the most common eye colors, use "poly_data_main_subset.csv" 
+
+# graph ard model
+graph.polyMk(k=5,states=c("brown","hazgre","yelbei","grey","blue"),
+	model="ARD",ordered=FALSE)
+title(main="\"Unordered\" polymorphic trait evolution model",
+	font.main=3)
+
+# create 5 models
+color<-setNames(poly_dat[[1]],
+	rownames(poly_dat))
+
+felid.unordered.sym <-fitpolyMk(mytr_felids,color,
+	model="SYM",ordered=FALSE)
+felid.unordered.ard<-fitpolyMk(mytr_felids,color,
+	model="ARD",ordered=FALSE)
+felid.unordered.er <-fitpolyMk(mytr_felids,color,
+	model="ER",ordered=FALSE)
+felid.ordered.er <-fitpolyMk(mytr_felids,color,
+	model="ER",ordered=TRUE)
+felid.unordered.trans <-fitpolyMk(mytr_felids,color,
+	model="transient",ordered=FALSE)
+```
+
+```{r}
+# compare the 5 models
+#data.frame(transition_model=c("ARD","SYM","transient","ER","ord_ER"),
+    #logLik=c(logLik(felid.unordered.ard),logLik(felid.unordered.sym),
+    #logLik(felid.unordered.trans),logLik(felid.unordered.er),logLik(felid.ordered.er)),
+    #AIC=c(AIC(felid.unordered.ard),AIC(felid.unordered.sym),AIC(felid.unordered.trans),
+    #AIC(felid.unordered.er),
+    #AIC(felid.ordered.er)))
+
+anova(felid.unordered.sym,felid.unordered.ard,felid.unordered.er,felid.ordered.er,felid.unordered.trans)
+
+# unordered ER is best supported
+```
+
+```{r}
+Q<-as.Qmatrix(felid.unordered.er)
+X<-felid.unordered.er$data
+felid.maps<-make.simmap(mytr_felids,x=X,Q=Q,
+	nsim=100)
+
+map.cols<-setNames(rainbow(31),felid.unordered.er$states)
+plot(felid.maps[[1]],map.cols,ftype="off",
+	ylim=c(0,1.05*Ntip(mytr_felids)))
+legend(x="bottomleft",legend=felid.unordered.er$states,pt.cex=1.2,pch=15,
+	col=map.cols,cex=0.8,bty="n",ncol=2)
+obj<-summary(felid.maps)
+par(fg="transparent")
+nodelabels(pie=obj$ace[1:mytr_felids$Nnode,],piecol=map.cols,
+	cex=0.3)
+```
+
+```{r}
+# plot all versions
+par(lend=1)
+for(i in 1:length(felid.maps))
+	plot(felid.maps[[i]],make.transparent(map.cols,
+		1/length(felid.maps)),add=if(i==1) FALSE else TRUE,ftype="off",lwd=3)
+nodelabels(pie=obj$ace[1:mytr_felids$Nnode,],piecol=map.cols,
+	cex=0.4)
+par(fg="black")
+legend(x="bottomleft",legend=felid.unordered.er$states,pt.cex=1.2,pch=15,
+	col=map.cols,cex=0.8,bty="n",ncol=2)
+```
+
+
+```{r}
+# TO DO ANALYSIS WITH "FULL" TREE (subspecies included):
+
+# subset just to felids (and outgroup)
+mytr_felids <- keep.tip(mytr, c("Crocuta_crocuta","Genetta_genetta","Vulpes_zerda","Acinonyx_jubatus","Puma_concolor","Puma_yagouaroundi","Lynx_canadensis","Lynx_lynx","Lynx_pardinus","Lynx_rufus","Felis_bieti","Felis_silvestris","Felis_margarita","Felis_chaus","Felis_nigripes","Prionailurus_bengalensis","Prionailurus_iriomotensis","Prionailurus_viverrinus","Prionailurus_planiceps","Prionailurus_rubiginosus","Felis_manul","Leopardus_colocolo","Leopardus_geoffroyi","Leopardus_guigna","Leopardus_tigrinus","Leopardus_pardalis","Leopardus_wiedii","Leopardus_jacobitus","Catopuma_badia","Catopuma_temminckii","Pardofelis_marmorata","Caracal_caracal","Profelis_aurata","Leptailurus_serval","Neofelis_nebulosa","Panthera_leo","Panthera_pardus","Panthera_onca","Panthera_tigris","Uncia_uncia","Prionodon_linsang"))
+```
+
+```{r}
+# replace outdated species names with more current ones
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Uncia_uncia")] <- "Panthera_uncia"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_bengalensis")] <- "Prionailurus_bengalensis_bengalensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Prionailurus_iriomotensis")] <- "Prionailurus_bengalensis_iriomotensis"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Felis_manul")] <- "Otocolobus_manul"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Puma_yagouaroundi")] <- "Herpailurus_yagouaroundi"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_jacobitus")] <- "Leopardus_jacobita"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_colocolo")] <- "Leopardus_colocola_pajeros"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Profelis_aurata")] <- "Caracal_aurata"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Leopardus_pardalis")] <- "Leopardus_pardalis_pardalis"
+
+
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Felis_chaus")] <- "Felis_chaus_chaus"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_pardus")] <- "Panthera_pardus_fusca"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_leo")] <- "Panthera_leo_leo"
+mytr_felids$tip.label[which(mytr_felids$tip.label == "Panthera_tigris")] <- "Panthera_tigris_tigris_tigris"
+```
+
+```{r}
+mytr_felids <- makeNodeLabel(mytr_felids, method = "number", prefix = "Node")
+plot(mytr_felids, show.tip.label = TRUE,show.node.label = TRUE)
+```
+
+```{r}
+# add missing subspecies manually
+nodes<-sapply("Panthera_leo_leo",function(x,y) which(y==x),y=mytr_felids$tip.label)
+edge.length<-setNames(mytr_felids$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_felids$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_leo_melanochaita",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_felids,new_tip,where=nodes+46)
+
+nodes<-sapply("Panthera_tigris_tigris_tigris",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_tigris_tigris_corbetti",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+45)
+
+nodes<-sapply("Panthera_tigris_tigris_tigris",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_tigris_tigris_altaica",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+46)
+
+nodes<-sapply("Panthera_tigris_tigris_tigris",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_tigris_sondaica",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+47)
+
+nodes<-sapply("Panthera_tigris_tigris_tigris",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_tigris_tigris_amoyensis",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+48)
+
+nodes<-sapply("Panthera_tigris_tigris_tigris",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_tigris_tigris_jacksoni",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+49)
+
+nodes<-sapply("Neofelis_nebulosa",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Neofelis_diardi",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+50)
+
+nodes<-sapply("Felis_bieti",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Felis_lybica_cafra",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+60)
+
+
+nodes<-sapply("Felis_bieti",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Felis_lybica_lybica",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+61)
+
+nodes<-sapply("Felis_bieti",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Felis_lybica_ornata",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+62)
+
+nodes<-sapply("Panthera_pardus_fusca",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_pardus_tulliana",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+55)
+
+nodes<-sapply("Panthera_pardus_fusca",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Panthera_pardus_orientalis",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+56)
+
+nodes<-sapply("Felis_chaus_chaus",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Felis_chaus_affinis",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+60)
+
+nodes<-sapply("Prionailurus_bengalensis_bengalensis",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Prionailurus_javanensis",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+65)
+
+
+nodes<-sapply("Leopardus_geoffroyi",function(x,y) which(y==x),y=mytr_short$tip.label)
+edge.length<-setNames(mytr_short$edge.length[sapply(nodes,
+function(x,y) which(y==x),y=mytr_short$edge[,2])],names(nodes))
+    
+new_tip<-list(edge=matrix(c(2,1),1,2),
+          tip.label="Leopardus_guttulus",
+          edge.length=edge.length,
+          Nnode=1)
+class(new_tip)<-"phylo"
+mytr_short<-bind.tree(mytr_short,new_tip,where=nodes+63)
+
+
+plotTree(mytr_short)
+```
+
+```{r}
+# make phylogeny with color states
+col_dat <- read.csv(file = 'col_data.csv') 
+plot(mytr_short, show.tip.label = TRUE, label.offset = 5)
+col_dat.sort <- data.frame(col_dat[, 2], col_dat[, 3],col_dat[, 4],col_dat[, 5],col_dat[, 6], row.names = col_dat[, 1])
+add.scale.bar()
+col_dat.sort <- col_dat.sort[mytr_short$tip.label, ]
+tiplabels(pch = 16, col = col_dat.sort[, 1] * 1)
+tiplabels(pch = 16, col = col_dat.sort[, 2] * 3, offset=1)
+tiplabels(pch = 16, col = col_dat.sort[, 3] * 7, offset=2)
+tiplabels(pch = 16, col = col_dat.sort[, 4] * 8, offset=3)
+tiplabels(pch = 16, col = col_dat.sort[, 5] * 4, offset=4)
+add.scale.bar()
+```
+
+```{r}
+# check which model is best for each color
+brown <- col_dat %>% dplyr::select(1, 2)
+hazgre <- col_dat %>% dplyr::select(1, 3)
+yelbei <- col_dat %>% dplyr::select(1, 4)
+grey <- col_dat %>% dplyr::select(1, 5)
+blue <- col_dat %>% dplyr::select(1, 6)
+
+brown_ard <- rayDISC(mytr_short,brown,model="ARD",node.states="marginal")
+brown_er <- rayDISC(mytr_short,brown,model="ER",node.states="marginal")
+modSel.rayDISC(brown_ard,brown_er,type="AICc")
+
+hazgre_ard <- rayDISC(mytr_short,hazgre,model="ARD",node.states="marginal")
+hazgre_er <- rayDISC(mytr_short,hazgre,model="ER",node.states="marginal")
+modSel.rayDISC(hazgre_ard,hazgre_er,type="AICc")
+
+yelbei_ard <- rayDISC(mytr_short,yelbei,model="ARD",node.states="marginal")
+yelbei_er <- rayDISC(mytr_short,yelbei,model="ER",node.states="marginal")
+modSel.rayDISC(yelbei_ard,yelbei_er,type="AICc")
+
+grey_ard <- rayDISC(mytr_short,grey,model="ARD",node.states="marginal")
+grey_er <- rayDISC(mytr_short,grey,model="ER",node.states="marginal")
+modSel.rayDISC(grey_ard,grey_er,type="AICc")
+
+blue_ard <- rayDISC(mytr_short,blue,model="ARD",node.states="marginal")
+blue_er <- rayDISC(mytr_short,blue,model="ER",node.states="marginal")
+modSel.rayDISC(blue_ard,blue_er,type="AICc")
+```
+```{r}
+# make a version of plotRECON that has the legend at the bottom
+plotRECON_leg <- function (phy, likelihoods, piecolors = NULL, cex = 0.5, pie.cex = 0.25, 
+  file = NULL, height = 11, width = 8.5, show.tip.label = TRUE, 
+  title = NULL, ...) 
+{
+  if (is.null(piecolors)) {
+    piecolors = c("white", "black", "red", "yellow", "forestgreen", 
+      "blue", "coral", "aquamarine", "darkorchid", "gold", 
+      "grey", "yellow", "#3288BD", "#E31A1C")
+  }
+  if (!is.null(file)) {
+    pdf(file, height = height, width = width, useDingbats = FALSE)
+  }
+  plot(phy, cex = cex, show.tip.label = show.tip.label, ...)
+  if (!is.null(title)) {
+    title(main = title)
+  }
+  nodelabels(pie = likelihoods, piecol = piecolors, cex = pie.cex)
+  states <- colnames(likelihoods)
+  legend(x = "bottomleft", states, cex = 0.8, pt.bg = piecolors, 
+    col = "black", pch = 21)
+  if (!is.null(file)) {
+    dev.off()
+  }
+}
+```
+
+```{r}
+# rayDISC test
+recon1 <- rayDISC(mytr_short,brown,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_short,recon1$states,title="brown",piecolors=c("white", "burlywood4"))
+
+recon2 <- rayDISC(mytr_short,hazgre,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_short,recon2$states,title="hazgre",piecolors=c("white", "green"))
+
+recon3 <- rayDISC(mytr_short,yelbei,model="ER",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_short,recon3$states,title="yelbei",piecolors=c("white", "yellow"))
+
+recon4 <- rayDISC(mytr_short,grey,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_short,recon4$states,title="grey",piecolors=c("white", "grey"))
+
+recon5 <- rayDISC(mytr_short,blue,model="ARD",node.states="marginal")
+## Plot reconstructions on tree
+plotRECON_leg(mytr_short,recon5$states,title="blue",piecolors=c("white", "blue"))
+
+```
+
+```{r}
+# plot all on the same graph
+# get nodes ready
+temp1 <- data.frame(recon1$states)
+temp1 <-temp1 %>% mutate(present= if_else(temp1[,1] >= temp1[,2], 0, 1))
+
+temp2 <- data.frame(recon2$states)
+temp2 <-temp2 %>% mutate(present= if_else(temp2[,1] >= temp2[,2], 0, 1))
+
+temp3 <- data.frame(recon3$states)
+temp3 <-temp3 %>% mutate(present= if_else(temp3[,1] >= temp3[,2], 0, 1))
+
+temp4 <- data.frame(recon4$states)
+temp4 <-temp4 %>% mutate(present= if_else(temp4[,1] >= temp4[,2], 0, 1))
+
+temp5 <- data.frame(recon5$states)
+temp5 <-temp5 %>% mutate(present= if_else(temp5[,1] >= temp5[,2], 0, 1))
+
+bigtemp <- data.frame(temp1$present,temp2$present,temp3$present,temp4$present,temp5$present)
+bigtemp[,2] <- bigtemp[,2] + bigtemp[,2] * 1
+bigtemp[,3] <- bigtemp[,3] + bigtemp[,3] * 2
+bigtemp[,4] <- bigtemp[,4] + bigtemp[,4] * 3
+bigtemp[,5] <- bigtemp[,5] + bigtemp[,5] * 4
+bigtemp <- data.matrix(bigtemp)
+
+# get data ready
+col_dat.sort <- data.frame(col_dat[, 2], col_dat[, 3],col_dat[, 4],col_dat[, 5],col_dat[, 6], row.names = col_dat[, 1])
+col_dat.sort <- col_dat.sort[mytr_short$tip.label, ]
+
+col_dat.sort[,2] <- col_dat.sort[,2] + col_dat.sort[,2] * 1
+col_dat.sort[,3] <- col_dat.sort[,3] + col_dat.sort[,3] * 2
+col_dat.sort[,4] <- col_dat.sort[,4] + col_dat.sort[,4] * 3
+col_dat.sort[,5] <- col_dat.sort[,5] + col_dat.sort[,5] * 4
+col_dat.sort <- data.matrix(col_dat.sort)
+
+pdf(file = "sub_recon_all.pdf", width = 20, height = 20)
+plot(mytr_short,use.edge.length=FALSE,label.offset = 0.5)
+lastPP<-get("last_plot.phylo",envir=.PlotPhyloEnv)
+node<-(lastPP$Ntip+1):length(lastPP$xx)
+X<-lastPP$xx[node]
+Y<-lastPP$yy[node]
+h<-par()$usr[2]
+for(i in 1:length(node))
+    floating.pie(X[i],Y[i],rep(0.25,5),radius=0.005*h,
+    col=c("white","burlywood4","green","yellow","grey","blue")[bigtemp[i,]+1])
+X<-lastPP$xx[1:Ntip(mytr_short)]
+Y<-lastPP$yy[1:Ntip(mytr_short)]
+for(i in 1:Ntip(mytr_short))
+    floating.pie(X[i],Y[i],rep(0.25,5),radius=0.005*h,
+    col=c("white","burlywood4","green","yellow","grey","blue")[col_dat.sort[i,]+1])
+
+dev.off()
+```
