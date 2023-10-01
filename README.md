@@ -9,7 +9,7 @@ This repository contains the images and code used for the analysis done in "Evol
 - Code
   - "Data Collection Script.ipynb" takes a folder of iris images for a species as its input and outputs which colors are present and their various shades. Some of this must be manually determined according to the methods outlined in the paper.
   - "Color Presence Reconstruction.Rmd" is the code for reconstructing which color eyes were present in the populations of each ancestor. This takes the output of "Data Collection Script.ipynb" as its input and outputs the reconstructions at each phylogenetic node, along with figures. 
-  - "Specific Color Reconstruction.Rmd" performs the reconstruction for the more specific colors (i.e. not just whether or not a color is present, but what its shades were exactly). This also takes the output of "Data Collection Script.ipynb" as its input and outputs the reconstructions at each phylogenetic node, along with figures. 
+  - "Quantitative Color Reconstruction.Rmd" performs the reconstruction for the more specific colors (i.e. not just whether or not a color is present, but what its shades were quantitatively). This also takes the output of "Data Collection Script.ipynb" as its input and outputs the reconstructions at each phylogenetic node, along with figures. 
   - "Output Specific Colors.ipynb" transforms the RGB .csv output of "Data Collection Script.ipynb" and "Specific Color Reconstruction.Rmd" into colorful images for figure creation. It also takes "shade_bg.png" as an background input.
   - "Find Correlations.Rmd" takes the output of "Data Collection Script.ipynb" and performs phylogenetic and tetrachoric correlations, resulting in raw data, as well as figures.
  
